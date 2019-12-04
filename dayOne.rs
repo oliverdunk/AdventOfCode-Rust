@@ -6,7 +6,7 @@ fn required_fuel(mass: i32) -> i32 {
 }
 
 fn main() {
-  let input = fs::read_to_string("dayOne.txt")
+  let input = fs::read_to_string("data/dayOne.txt")
     .expect("Unable to read file dayOne.txt");
 
   let mut total_fuel_so_far = 0;
