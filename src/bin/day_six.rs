@@ -1,60 +1,63 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 
-fn transitive_closure(mut rules: HashMap<String, HashMap<String, i32>>) -> HashMap<String, HashMap<String, i32>> {
+fn transitive_closure(rules: &mut HashMap<String, HashSet<String>>) {
     loop {
         let mut rules_added = 0;
 
         let current_rules = rules.clone();
         for (start, connected_to) in current_rules {
-            for (current_connection, dist) in connected_to.clone() {
-                if rules.contains_key(&current_connection) {
-                    let mut reachable_via = rules.get(&current_connection).unwrap().clone();
-                    reachable_via.retain(|x, _| *x != start);
+            let connection_count = connected_to.len();
 
-                    for (new_connection, additional_dist) in reachable_via {
-                        if !rules.get_mut(&start).unwrap().contains_key(&new_connection) || rules.get_mut(&start).unwrap().get(&new_connection).unwrap() > &(dist + additional_dist) {
-                            rules.get_mut(&start).unwrap().insert(new_connection, dist + additional_dist);
-                            rules_added += 1;
-                        }
-                    }
+            for current_connection in connected_to {
+                let reachable_via = rules.get(&current_connection);
+
+                if reachable_via.is_some() {
+                    let mut reachable_via = reachable_via.unwrap().clone();
+                    reachable_via.retain(|x| *x != start);
+                    rules.get_mut(&start).unwrap().extend(reachable_via);
                 }
             }
-        }
 
+            rules_added = rules_added + (rules.get(&start).unwrap().len() - connection_count);
+        }
+        
         if rules_added == 0 {
             break;
         }
     }
-
-    rules
 }
 
-fn symmetric_closure(mut rules: HashMap<String, HashMap<String, i32>>) -> HashMap<String, HashMap<String, i32>> {
+fn part_two(mut rules: HashMap<String, HashSet<String>>) -> i32 {
+    let mut steps = 0;
+    
+    let mut reached = HashSet::new();
+    reached.insert("YOU".to_string());
+    
     loop {
-        let mut rules_added = 0;
-
-        let current_rules = rules.clone();
-        for (start, connected_to) in current_rules {
-            for (current_connection, dist) in connected_to.clone() {
-                if rules.contains_key(&current_connection) {
-                    if !rules.get(&current_connection).unwrap().contains_key(&start)
-                        || rules.get(&current_connection).unwrap().get(&start).unwrap() > &dist {
-                        rules.get_mut(&current_connection).unwrap().insert(start.to_string(), dist);
-                        rules_added += 1;
-                    }
+        let mut to_add = HashSet::new();
+        
+        for start in &reached {
+            // Look at what orbits this starting position
+            to_add.extend(rules.entry(start.to_string()).or_default().clone());
+            
+            // Look at what this starting position orbits
+            for (maybe_reachable, reachable_from) in &rules {
+                if reachable_from.contains(start) {
+                    to_add.insert(maybe_reachable.to_string());
                 }
             }
         }
-
-        rules = transitive_closure(rules);
-
-        if rules_added == 0 {
-            break;
+        
+        steps = steps + 1;
+        
+        if to_add.contains(&"SAN".to_string()) {
+            return steps - 2;
         }
+        
+        reached.extend(to_add);
     }
-
-    rules
 }
 
 fn main() {
@@ -62,7 +65,7 @@ fn main() {
         .expect("Unable to read daySix.txt");
 
     // Start by building a list of direct orbits
-    let mut rules: HashMap<String, HashMap<String, i32>> = HashMap::new();
+    let mut rules: HashMap<String, HashSet<String>> = HashMap::new();
 
     for line in input.lines() {
         let (to, from) = (
@@ -70,18 +73,18 @@ fn main() {
             line.split(")").nth(1).unwrap(),
         );
 
-        let rules_vec = rules.entry(from.to_string()).or_insert(HashMap::new());
-        rules_vec.insert(to.to_string(), 1);
+        let rules_vec = rules.entry(from.to_string()).or_insert(HashSet::new());
+        rules_vec.insert(to.to_string());
     }
 
-    let rules = transitive_closure(rules);
-
     // Part one - find transitive closure of orbits and output number of connections
-    let final_orbit_count = rules.iter()
+    let mut rules_closure = rules.clone();
+    transitive_closure(&mut rules_closure);
+
+    let final_orbit_count = rules_closure
+        .iter()
         .fold(0, |acc, x| acc + x.1.len());
 
     println!("Part one: {:?}", final_orbit_count);
-
-    // Part two - breadth-first search to find quickest way to reach Santa
-    println!("Part two: {:?}", symmetric_closure(rules).get("YOU").unwrap().get("SAN").unwrap() - 2);
+    println!("Part two: {:?}", part_two(rules));
 }
